@@ -1,44 +1,37 @@
-const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } = require('discord.js'); 
+const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } = require('discord.js');
 const { default: axios } = require('axios');
-const {pagination, ButtonTypes, ButtonStyles} = require('@devraelfreeze/discordjs-pagination');
+const { pagination, ButtonTypes, ButtonStyles } = require('@devraelfreeze/discordjs-pagination');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('fortniteshop')
-        .setDescription('Gives todays current Fortnite item shop!'),
+        .setDescription("Gives today's current Fortnite item shop!"),
+
     async execute(interaction) {
-        await axios.get('https://fortnite-api.com/v2/shop').then((response) => {
-            const brOutfitItems = response.data.data.entries.filter(item => item.hasOwnProperty('brItems'))
-                                                            .flatMap(item => item.brItems)
-                                                            .filter(item => item.type.value === 'outfit');
-            let brItemsNames = brOutfitItems.map(item => item.name);
-            //Remove duplicates
-            brItemsNames = brItemsNames.filter((item, index) => brItemsNames.indexOf(item) === index);
-            let brItemsIcons = brOutfitItems.map(item => item.images.icon);
-            //Remove duplicates
-            brItemsIcons = brItemsIcons.filter((item, index) => brItemsIcons.indexOf(item) === index);
+        try {
+            const response = await axios.get('https://fortnite-api.com/v2/shop');
+            const brOutfitItems = response.data.data.entries
+                .filter(item => item.hasOwnProperty('brItems'))
+                .flatMap(item => item.brItems)
+                .filter(item => item.type.value === 'outfit');
 
-            const files = [];
+            // Get unique item names and icons
+            const brItemsNames = [...new Set(brOutfitItems.map(item => item.name))];
+            const brItemsIcons = [...new Set(brOutfitItems.map(item => item.images.icon))];
 
-            brItemsIcons.forEach(element => {
-                files.push(new AttachmentBuilder(element));
-            });
+            // Create attachments and embeds
+            const files = brItemsIcons.map(icon => new AttachmentBuilder(icon));
+            const embeds = brItemsNames.map((name, index) =>
+                new EmbedBuilder()
+                    .setTitle(name)
+                    .setImage(brItemsIcons[index])
+            );
 
-            const embeds = [];
-
-            brItemsNames.forEach(element => {
-                const embed = new EmbedBuilder()
-                    .setTitle(element)
-                    .setImage(brItemsIcons[brItemsNames.indexOf(element)]);
-                embeds.push(embed);
-            });
-
-            console.log(embeds);
-
-            pagination({
-                embeds: embeds,
+            // Paginate the embeds
+            await pagination({
+                embeds,
                 author: interaction.member.user,
-                interaction: interaction,
+                interaction,
                 ephemeral: true,
                 time: 3600000,
                 disableButtons: false,
@@ -48,15 +41,22 @@ module.exports = {
                     {
                         type: ButtonTypes.previous,
                         label: 'Previous Page',
-                        style: ButtonStyles.Primary
-                      },
-                      {
+                        style: ButtonStyles.Primary,
+                    },
+                    {
                         type: ButtonTypes.next,
                         label: 'Next Page',
-                        style: ButtonStyles.Success
-                      }
-                ]
-            })
-        });
-    }
-}
+                        style: ButtonStyles.Success,
+                    },
+                ],
+            });
+        } catch (error) {
+            console.error('Error fetching Fortnite shop:', error);
+            await interaction.reply({
+                content: 'There was an error fetching the Fortnite item shop. Please try again later.',
+                ephemeral: true,
+            });
+        }
+    },
+};
+
